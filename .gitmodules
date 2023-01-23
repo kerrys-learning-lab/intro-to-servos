@@ -1,0 +1,3 @@
+[submodule ".devcontainer"]
+	path = .devcontainer
+	url = git@github.com:kerrys-learning-lab/devcontainer-rust.git

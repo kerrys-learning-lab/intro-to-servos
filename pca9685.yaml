@@ -1,0 +1,3 @@
+device: /dev/i2c-1
+address: 0x40
+output_frequency_hz: 50
