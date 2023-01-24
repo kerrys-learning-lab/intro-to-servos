@@ -1,3 +1,7 @@
+![Breadboard diagram](fritzing.png)
+
+
+
 ## Verify/detect the presence of a device on the I2C bus
 
 ```
