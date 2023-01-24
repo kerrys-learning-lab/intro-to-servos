@@ -1,4 +1,4 @@
-![Breadboard diagram](fritzing.png)
+![Breadboard diagram](doc/fritzing.png)
 
 
 
