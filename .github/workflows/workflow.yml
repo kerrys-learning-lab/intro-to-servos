@@ -13,3 +13,6 @@ jobs:
       actor_name: ${{ secrets.KERRYS_LEARNING_LAB_ACTOR }}
       actor_token: ${{ secrets.KERRYS_LEARNING_LAB_TOKEN }}
       actor_email: ${{ secrets.KERRYS_LEARNING_LAB_EMAIL }}
+      cargo_registry_name: ${{ secrets.CLOUDSMITH_CARBERNETES_REGISTRY }}
+      cargo_registry_index: ${{ secrets.CLOUDSMITH_CARBERNETES_INDEX }}
+      cargo_registry_token: ${{ secrets.CLOUDSMITH_CARBERNETES_TOKEN }}

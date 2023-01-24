@@ -22,6 +22,18 @@ on:
       actor_email:
         description: Email address of the given actor (i.e., used in 'git config')
         required: true
+      cargo_registry_name:
+        description: |
+          Name of the Cargo registry to which packages will be pushed.
+        required: true
+      cargo_registry_index:
+        description: |
+          URL of the Cargo registry to which packages will be pushed.
+        required: true
+      cargo_registry_token:
+        description: |
+          Access token for the Cargo registry
+        required: true
 
 jobs:
   build-rust:
@@ -34,7 +46,7 @@ jobs:
         run: curl https://sh.rustup.rs -sSf | sh -s -- -y
 
       - name: Login to Cloudsmith registry
-        run: cargo login --registry ${{ secrets.cloudsmith_registry }} ${{ secrets.cloudsmith_token }}
+        run: cargo login --registry ${{ secrets.cargo_registry_name }} ${{ secrets.cargo_registry_token }}
 
       - name: Install cross-compiler
         run: cargo install --force cross
