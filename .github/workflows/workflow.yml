@@ -1,0 +1,15 @@
+name: Rust workflow
+
+on:
+  - push
+  - workflow_dispatch
+
+jobs:
+  ref-rust-workflow:
+    uses: ./.github/workflows/.rust-crate.workflow.yml
+    with:
+      target: aarch64-unknown-linux-gnu
+    secrets:
+      actor_name: ${{ secrets.KERRYS_LEARNING_LAB_ACTOR }}
+      actor_token: ${{ secrets.KERRYS_LEARNING_LAB_TOKEN }}
+      actor_email: ${{ secrets.KERRYS_LEARNING_LAB_EMAIL }}
