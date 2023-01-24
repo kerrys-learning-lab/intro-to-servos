@@ -34,7 +34,19 @@ user@host:~ $ scp target/aarch64-unknown-linux-gnu/release/i2c-test \
 ## Execute a test
 ```
 pi@raspberrypi:~ $ export RUST_LOG=debug
+
+# right-most angle for DS3218 20Kg servo on Channel 0
 pi@raspberrypi:~ $ /var/tmp/i2c-test --config-file-path /var/tmp/pca9685.yaml \
                                      0 \
-                                     0.3
+                                     0.5
+
+# center angle for DS3218 20Kg servo on Channel 0
+pi@raspberrypi:~ $ /var/tmp/i2c-test --config-file-path /var/tmp/pca9685.yaml \
+                                     0 \
+                                     1.5
+
+# left-most angle for DS3218 20Kg servo on Channel 0
+pi@raspberrypi:~ $ /var/tmp/i2c-test --config-file-path /var/tmp/pca9685.yaml \
+                                     0 \
+                                     2.5
 ```
