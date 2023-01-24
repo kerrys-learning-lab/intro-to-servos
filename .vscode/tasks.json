@@ -25,6 +25,23 @@
 			}
 		},
 		{
+			"label": "unit test",
+			"type": "shell",
+			"problemMatcher": [
+				"$rustc"
+			],
+			"command": "cargo",
+			"args": [
+				"test",
+				"--lib",
+				"--quiet"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
 			"label": "Deploy to rpi",
 			"type": "shell",
 			"command": "scp",

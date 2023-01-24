@@ -1,5 +1,5 @@
 [package]
-name = "i2c-test"
+name = "pca9685"
 version = "0.1.0"
 edition = "2021"
 
