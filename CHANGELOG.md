@@ -1,3 +1,9 @@
+## v1.0.1 (2023-01-25)
+
+### Fix
+
+- Convert to crate [test ci]
+
 ## v1.0.0 (2023-01-25)
 
 ### Feat
