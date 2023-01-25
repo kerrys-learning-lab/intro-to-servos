@@ -66,7 +66,7 @@ jobs:
         run: cross build --release --target ${{ inputs.target }}
 
       - name: Publish crate
-        # if: github.ref_protected && !startsWith(github.event.head_commit.message, 'bump:')
+        if: ${{ startsWith( github.ref, 'refs/tags/v') || contains(github.event.head_commit.message, '[test ci]') }}
         run: cargo publish --registry ${{ secrets.cargo_registry_name }}
 
   ref-check-repo-settings:
