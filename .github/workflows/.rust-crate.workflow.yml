@@ -50,7 +50,7 @@ jobs:
           mkdir -p ~/.cargo
           cat << EOF > ~/.cargo/config.toml
           [registries]
-          ${{ secrets.cargo_registry_name }} = { index = \"${{ secrets.cargo_registry_index }}\" }
+          ${{ secrets.cargo_registry_name }} = { index = "${{ secrets.cargo_registry_index }}" }
           EOF
 
       - name: Login to Cloudsmith registry
