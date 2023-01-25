@@ -1,3 +1,9 @@
+## v1.0.2 (2023-01-25)
+
+### Fix
+
+- Update Cargo.toml:repository
+
 ## v1.0.1 (2023-01-25)
 
 ### Fix
