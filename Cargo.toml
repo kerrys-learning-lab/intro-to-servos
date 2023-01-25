@@ -5,7 +5,7 @@ edition = "2021"
 description = "A PCA9685 library for managing servos and LEDs"
 license = "GPL-3.0-or-later"
 exclude = [ ".devcontainer", ".github", ".vscode", ".git*" ]
-repository = "https://github.com/kerrys-learning-lab/intro-to-servos"
+repository = "https://github.com/kerrys-learning-lab/pca9685"
 
 [dependencies]
 clap = { version = "4.0.29", features = ["derive"] }
