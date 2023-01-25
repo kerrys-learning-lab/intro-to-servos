@@ -65,6 +65,10 @@ jobs:
       - name: Build/cross-compile
         run: cross build --release --target ${{ inputs.target }}
 
+      - name: Publish crate
+        # if: github.ref_protected && !startsWith(github.event.head_commit.message, 'bump:')
+        run: cargo publish --registry ${{ secrets.cargo_registry_name }}
+
   ref-check-repo-settings:
     uses: kerrys-learning-lab/.github/.github/workflows/.check-repo-settings.yml@main
     secrets:

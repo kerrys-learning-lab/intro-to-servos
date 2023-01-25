@@ -2,3 +2,6 @@ commitizen:
   name: cz_conventional_commits
   tag_format: v$version
   version: 0.1.0
+  version_files:
+    - cz.yaml
+    - Cargo.toml:version
