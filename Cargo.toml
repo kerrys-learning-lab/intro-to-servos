@@ -2,9 +2,10 @@
 name = "pca9685"
 version = "1.0.0"
 edition = "2021"
+description = "A PCA9685 library for managing servos and LEDs"
+license = "GPL-3.0-or-later"
 exclude = [ ".devcontainer", ".github", ".vscode", ".git*" ]
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+repository = "https://github.com/kerrys-learning-lab/intro-to-servos"
 
 [dependencies]
 clap = { version = "4.0.29", features = ["derive"] }
