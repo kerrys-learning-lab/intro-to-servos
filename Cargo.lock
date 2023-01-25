@@ -184,21 +184,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
-name = "i2c-test"
-version = "0.1.0"
-dependencies = [
- "clap",
- "env_logger",
- "exitcode",
- "linux-embedded-hal",
- "log",
- "pwm-pca9685",
- "rand",
- "serde",
- "serde_yaml",
-]
-
-[[package]]
 name = "i2cdev"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -350,6 +335,21 @@ name = "os_str_bytes"
 version = "6.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b7820b9daea5457c9f21c69448905d723fbd21136ccf521748f23fd49e723ee"
+
+[[package]]
+name = "pca9685"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "env_logger",
+ "exitcode",
+ "linux-embedded-hal",
+ "log",
+ "pwm-pca9685",
+ "rand",
+ "serde",
+ "serde_yaml",
+]
 
 [[package]]
 name = "ppv-lite86"

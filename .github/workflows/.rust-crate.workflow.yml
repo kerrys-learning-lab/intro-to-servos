@@ -1,0 +1,85 @@
+name: Rust crate workflow
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: Cross-compilation target
+        default: x86_64-unknown-linux-gnu
+        required: false
+        type: string
+    secrets:
+      actor_name:
+        description: |
+          Name of the entity performing the action.
+          Repository modifications (created tags, CHANGELOG.md, etc) will be
+          attributed to this entity.
+        required: true
+      actor_token:
+        description: |
+          GITHUB_TOKEN or PAT authorized to make changes to the repository
+        required: true
+      actor_email:
+        description: Email address of the given actor (i.e., used in 'git config')
+        required: true
+      cargo_registry_name:
+        description: |
+          Name of the Cargo registry to which packages will be pushed.
+        required: true
+      cargo_registry_index:
+        description: |
+          URL of the Cargo registry to which packages will be pushed.
+        required: true
+      cargo_registry_token:
+        description: |
+          Access token for the Cargo registry
+        required: true
+
+jobs:
+  build-rust:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Install prerequisites
+        run: sudo apt-get update -y && sudo apt-get install -y curl
+
+      - name: Install Rust toolchain
+        run: curl https://sh.rustup.rs -sSf | sh -s -- -y
+
+      - name: Add registry index to ~/.cargo/config.toml
+        run: |
+          mkdir -p ~/.cargo
+          cat << EOF > ~/.cargo/config.toml
+          [registries]
+          ${{ secrets.cargo_registry_name }} = { index = "${{ secrets.cargo_registry_index }}" }
+          EOF
+
+      - name: Login to Cloudsmith registry
+        run: cargo login --registry ${{ secrets.cargo_registry_name }} ${{ secrets.cargo_registry_token }}
+
+      - name: Install cross-compiler
+        run: cargo install --force cross
+
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Build/cross-compile
+        run: cross build --release --target ${{ inputs.target }}
+
+      - name: Publish crate
+        if: ${{ startsWith( github.ref, 'refs/tags/v') || contains(github.event.head_commit.message, '[test ci]') }}
+        run: cargo publish --registry ${{ secrets.cargo_registry_name }}
+
+  ref-check-repo-settings:
+    uses: kerrys-learning-lab/.github/.github/workflows/.check-repo-settings.yml@main
+    secrets:
+      actor_token: ${{ secrets.actor_token }}
+
+  ref-bump-version:
+    uses: kerrys-learning-lab/.github/.github/workflows/.bump-version.yml@main
+    needs:
+      - build-rust
+      - ref-check-repo-settings
+    secrets:
+      actor_name: ${{ secrets.actor_name }}
+      actor_token: ${{ secrets.actor_token }}
+      actor_email: ${{ secrets.actor_email }}
