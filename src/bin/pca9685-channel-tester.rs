@@ -28,7 +28,7 @@ fn main() {
 
     let config = fs::read_to_string(args.config_file_path).unwrap();
     let config: Config = serde_yaml::from_str(&config).unwrap();
-    let mut pca = Pca9685::new(&config);
+    let pca = Pca9685::new(&config);
 
     let channel = Channel::try_from(args.channel).unwrap();
     pca.set_pw_ms(channel, args.pulse_width_ms).unwrap();

@@ -1,0 +1,7 @@
+{
+  "channel": 0,
+  "custom_limits": {
+    "min_on_count": 0,
+    "max_on_count": 4096
+  }
+}
