@@ -76,6 +76,10 @@ jobs:
           platforms: "arm64"
         if: ${{ inputs.arm64 }}
 
+      - name: Show buildx data
+        run: docker buildx ls
+        if: ${{ inputs.arm64 }}
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v3
         with:
