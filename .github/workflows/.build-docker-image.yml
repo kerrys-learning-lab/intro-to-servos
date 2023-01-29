@@ -88,6 +88,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: "linux/amd64${{ inputs.arm64 && ',linux/arm64' || ''}}"
+          load: true
 
       - name: Get built image tag
         id: parse_image_tag
