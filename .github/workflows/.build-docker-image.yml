@@ -87,6 +87,7 @@ jobs:
           push: ${{ startsWith( github.ref, 'refs/tags/v') || contains(github.event.head_commit.message, '[test ci]') }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          platforms: "linux/amd64${{ inputs.arm64 && ',linux/arm64' || ''}}"
 
       - name: Get built image tag
         id: parse_image_tag
