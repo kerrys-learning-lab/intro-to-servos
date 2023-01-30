@@ -4,9 +4,10 @@ on: [push, workflow_dispatch]
 
 jobs:
   image-workflow:
-    uses: ./.github/workflows/.build-docker-image.yml
+    uses: kerrys-learning-lab/.github/.github/workflows/docker-image.workflow.yml@main
     secrets:
       actor_name: ${{ secrets.KERRYS_LEARNING_LAB_ACTOR }}
       actor_token: ${{ secrets.KERRYS_LEARNING_LAB_TOKEN }}
+      actor_email: ${{ secrets.KERRYS_LEARNING_LAB_EMAIL }}
     with:
       arm64: true
