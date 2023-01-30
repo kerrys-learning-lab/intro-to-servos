@@ -5,4 +5,4 @@ commitizen:
   version: 1.0.2
   version_files:
   - cz.yaml
-  - Cargo.toml:version
+  - Cargo.toml:^version
