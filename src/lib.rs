@@ -1,254 +1,139 @@
-use linux_embedded_hal::I2cdev;
-use log::{debug, info};
-use pwm_pca9685::{Address, Channel, OutputDriver, Pca9685 as Pca9685Impl};
+use crate::utils::{deserialize_channel, serialize_channel};
+use linux_embedded_hal::i2cdev::linux::LinuxI2CError;
+use pwm_pca9685::Channel;
+use pwm_pca9685::OutputDriver;
 use serde::Deserialize;
-use std::fmt;
+use serde::Serialize;
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+mod channelproxy;
+pub mod pca9685;
+mod pca9685_proxy;
+pub mod utils;
+
+/// The PCA9685 has 4096 steps (12-bit PWM) of resolution
+pub const PCA_PWM_RESOLUTION: u16 = 4096;
 
 #[derive(Debug, Deserialize)]
+/// An immutable YAML-based configuration of a [Pca9685] device.
 pub struct Config {
     /// Path to I2C device file (e.g, /dev/i2c-1)
-    device: String,
+    pub device: String,
 
     /// Address of PCA9685 (e.g, 0x40)
-    address: u8,
+    pub address: u8,
 
     /// PWM output frequency
-    output_frequency_hz: u16,
+    pub output_frequency_hz: u16,
 
     /// Open drain (if not set, use Totem pole)
     #[serde(default)]
-    open_drain: bool,
+    pub open_drain: bool,
 }
 
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+/// Constrains the limits of a Channel to values other than the default [0, 4095].
+///
+/// For example, a servo may be constrained to [1000, 3000] which then affects
+/// the behavior of subsequent calls to [Pca9685::set_pwm_count],
+/// [Pca9685::set_pw_ms], and [Pca9685::set_pct]
+pub struct ChannelCountLimits {
+    pub min_on_count: u16,
+    pub max_on_count: u16,
+}
+
+const DEFAULT_CHANNEL_COUNT_LIMITS: ChannelCountLimits = ChannelCountLimits {
+    min_on_count: 0,
+    max_on_count: PCA_PWM_RESOLUTION,
+};
+
+impl ChannelCountLimits {
+    /// Returns true if `value` is within [`min_on_count`, `max_on_count`]
+    pub fn is_valid(&self, value: u16) -> bool {
+        value >= self.min_on_count && value <= self.max_on_count
+    }
+}
+
+impl Default for ChannelCountLimits {
+    fn default() -> Self {
+        DEFAULT_CHANNEL_COUNT_LIMITS
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+/// Represents the desired and/or actual configuration of a Channel.
+///
+/// As an input, sets the `ChannelCountLimits` on the associated Channel (in
+/// which case `current_count` is not used).
+///
+/// As an output, describes the current PWM count (`current_count`) and
+/// configured limits (`custom_limits`), if any.
+pub struct ChannelConfig {
+    #[serde(
+        serialize_with = "serialize_channel",
+        deserialize_with = "deserialize_channel"
+    )]
+    pub channel: Channel,
+    pub current_count: Option<u16>,
+    pub custom_limits: Option<ChannelCountLimits>,
+}
+
+struct ChannelProxy {
+    name: String,
+    config: ChannelConfig,
+    pca_max_pw_ms: f64,
+    pca_count_length_ms: f64,
+}
+
+trait Pca9685Proxy {
+    fn max_pw_ms(&self) -> f64;
+
+    fn single_count_duration_ms(&self) -> f64;
+
+    fn output_frequency_hz(&self) -> u16;
+
+    fn device(&self) -> String;
+
+    fn address(&self) -> u8;
+
+    fn prescale(&self) -> u8;
+
+    fn output_type(&self) -> OutputDriver;
+
+    fn set_channel_off_count(
+        &mut self,
+        channel: Channel,
+        off: u16,
+    ) -> Result<(), pwm_pca9685::Error<LinuxI2CError>>;
+
+    fn set_channel_full_on(
+        &mut self,
+        channel: Channel,
+    ) -> Result<(), pwm_pca9685::Error<LinuxI2CError>>;
+
+    fn set_channel_full_off(
+        &mut self,
+        channel: Channel,
+    ) -> Result<(), pwm_pca9685::Error<LinuxI2CError>>;
+}
+
+/// Provides access to a PCA9685 controller, with the ability to customize the
+/// range of each Channel, and set each Channel's value using raw counts,
+/// pulse width in milliseconds, or percent of max pulse width.
 pub struct Pca9685 {
-    max_pw_ms: f64,
-    min_pw_ms: f64,
-    device: String,
-    address: u8,
-    output_frequency_hz: u16,
-    prescale: u8,
-    output_type: OutputDriver,
-    inner: Option<Pca9685Impl<I2cdev>>,
+    inner: Mutex<Box<dyn Pca9685Proxy>>,
+    channels: Mutex<HashMap<u8, ChannelProxy>>,
 }
 
-#[derive(Debug, Clone)]
-pub struct Pca9685Error {
-    operation: String,
-    msg: String,
+/// Represents the possible errors that may occur when commanding the [Pca9685].
+pub enum Pca9685Error {
+    NoSuchChannelError(u8),
+    PulseWidthRangeError(f64, f64),
+    CustomLimitsError(u16, ChannelCountLimits),
+    PercentOfRangeError(f64),
+    Pca9685DriverError(pwm_pca9685::Error<LinuxI2CError>),
 }
 
-impl fmt::Display for Pca9685Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "Unable to complete operation: {} ({}).",
-            self.operation, self.msg
-        )
-    }
-}
-
-impl Pca9685 {
-    const INTERNAL_OSC_HZ: f64 = 25.0 * 1000.0 * 1000.0; // 25 MHz
-    const RESOLUTION: i32 = 4096;
-
-    pub fn new(config: &Config) -> Pca9685 {
-        info!("Opening I2C device: {}", config.device);
-        let dev = I2cdev::new(&config.device).unwrap();
-
-        let mut pca = Pca9685::init(
-            config,
-            Some(Pca9685Impl::new(dev, Address::from(config.address)).unwrap()),
-        );
-
-        match &mut pca.inner {
-            Some(pca_impl) => {
-                pca_impl.set_prescale(pca.prescale).unwrap();
-                pca_impl.set_output_driver(pca.output_type).unwrap();
-                pca_impl.enable().unwrap();
-            }
-            None => {}
-        }
-
-        return pca;
-    }
-
-    pub fn mock(config: &Config) -> Pca9685 {
-        return Pca9685::init(&config, None);
-    }
-
-    pub fn init(config: &Config, inner: Option<Pca9685Impl<I2cdev>>) -> Pca9685 {
-        let cycle_duration_ms = 1000.0 / config.output_frequency_hz as f64;
-        let duration_per_count_ms = cycle_duration_ms / Pca9685::RESOLUTION as f64;
-
-        debug!(
-            "Max PW: {:0.6}ms ... each count is {:0.6}ms",
-            cycle_duration_ms, duration_per_count_ms
-        );
-
-        Pca9685 {
-            max_pw_ms: cycle_duration_ms,
-            min_pw_ms: duration_per_count_ms,
-            device: config.device.clone(),
-            address: config.address,
-            output_frequency_hz: config.output_frequency_hz,
-            prescale: Pca9685::calculate_prescale(config.output_frequency_hz),
-            output_type: if config.open_drain {
-                OutputDriver::OpenDrain
-            } else {
-                OutputDriver::TotemPole
-            },
-            inner: inner,
-        }
-    }
-
-    pub fn output_frequency_hz(&self) -> u16 {
-        return self.output_frequency_hz;
-    }
-
-    pub fn device(&self) -> &String {
-        return &self.device;
-    }
-
-    pub fn address(&self) -> u8 {
-        return self.address;
-    }
-
-    pub fn set_pw_ms(&mut self, channel: Channel, pw_ms: f64) -> Result<u16, Pca9685Error> {
-        if pw_ms < 0.0 {
-            return Err(Pca9685Error {
-                operation: "set_pw_ms".to_owned(),
-                msg: format!("Desired pulse width ({}ms) cannot be negative.", pw_ms).to_owned(),
-            });
-        } else if pw_ms > self.max_pw_ms {
-            return Err(Pca9685Error {
-                operation: "set_pw_ms".to_owned(),
-                msg: format!(
-                    "Desired pulse width ({}ms) exceeds maximum ({}ms).  Check output_frequency.",
-                    pw_ms, self.max_pw_ms
-                )
-                .to_owned(),
-            });
-        }
-
-        let pwm_counts = (pw_ms / self.min_pw_ms) as u16;
-
-        debug!(
-            "Setting channel {:?} to {} counts ({:0.6}ms)",
-            channel,
-            pwm_counts,
-            pwm_counts as f64 * self.min_pw_ms
-        );
-
-        match &mut self.inner {
-            Some(pca_impl) => pca_impl.set_channel_on_off(channel, 0, pwm_counts).unwrap(),
-            None => {}
-        }
-        return Ok(pwm_counts);
-    }
-
-    fn calculate_prescale(output_frequency_hz: u16) -> u8 {
-        // Per PCA 9685 Datasheet, 7.3.5 PWM frequency PRE_SCALE:
-        //    prescale_value = round(internal_osc/(4096 * output_frequency_hz)) - 1
-        let value =
-            Pca9685::INTERNAL_OSC_HZ / (Pca9685::RESOLUTION as f64 * output_frequency_hz as f64);
-        let value = value.round() as u8 - 1;
-        debug!(
-            "Output frequency: {}Hz (pre_scale: {})",
-            output_frequency_hz, value
-        );
-
-        return value;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::{Config, Pca9685, Pca9685Error};
-    use pwm_pca9685::{Channel, OutputDriver};
-
-    fn create_mock(output_frequency_hz: u16) -> (Config, Pca9685) {
-        let config = Config {
-            device: "/dev/foo".to_owned(),
-            address: 0x40,
-            output_frequency_hz: output_frequency_hz,
-            open_drain: false,
-        };
-
-        let pca = Pca9685::mock(&config);
-
-        return (config, pca);
-    }
-
-    #[test]
-    fn init() {
-        let test_output_frequency_hz = 200;
-
-        let (config, pca) = create_mock(test_output_frequency_hz);
-
-        let expected_max_pw_ms = 1000.0 / test_output_frequency_hz as f64;
-        let expected_min_pw_ms = expected_max_pw_ms / 4096.0;
-        let expected_prescale = 30; // per PCA9685 documented example using 200Hz
-
-        assert_eq!(pca.max_pw_ms, expected_max_pw_ms);
-        assert_eq!(pca.min_pw_ms, expected_min_pw_ms);
-        assert_eq!(pca.device, config.device);
-        assert_eq!(pca.address, config.address);
-        assert_eq!(pca.output_frequency_hz, config.output_frequency_hz);
-        assert_eq!(pca.prescale, expected_prescale);
-        assert_eq!(pca.output_type, OutputDriver::TotemPole);
-    }
-
-    #[test]
-    fn set_pw_ms() -> Result<(), Pca9685Error> {
-        let test_output_frequency_hz = 200;
-
-        let (_, mut pca) = create_mock(test_output_frequency_hz);
-
-        // Test at min/max of range
-        assert_eq!(pca.set_pw_ms(Channel::C0, 0.0)?, 0);
-        assert_eq!(pca.set_pw_ms(Channel::C0, pca.max_pw_ms)?, 4096);
-
-        // Test at percentages of range
-        for pct in [0.25, 0.5, 0.75] {
-            let test_pw_ms = pca.max_pw_ms * pct;
-            let expected_counts = (4096.0 * pct) as u16;
-            assert_eq!(pca.set_pw_ms(Channel::C0, test_pw_ms)?, expected_counts);
-        }
-
-        // Test a specific value, using formula
-        for test_pw_ms in [1.0, 1.5, 2.0] {
-            // Hz to to millis, so to speak
-            let expected_count = 1000.0 / test_output_frequency_hz as f64;
-
-            // Duration of each count, in millis
-            let expected_count = expected_count / 4096.0;
-
-            // Number of counts required for given test_pw_ms
-            let expected_count = (test_pw_ms / expected_count) as u16;
-
-            assert_eq!(pca.set_pw_ms(Channel::C0, test_pw_ms)?, expected_count);
-        }
-
-        return Ok(());
-    }
-
-    #[test]
-    #[should_panic(expected = "cannot be negative")]
-    fn set_pw_ms_neg() {
-        let test_output_frequency_hz = 200;
-
-        let (_, mut pca) = create_mock(test_output_frequency_hz);
-
-        pca.set_pw_ms(Channel::C0, -1.0).unwrap();
-    }
-
-    #[test]
-    #[should_panic(expected = "exceeds maximum")]
-    fn set_pw_ms_too_large() {
-        let test_output_frequency_hz = 200;
-
-        let (_, mut pca) = create_mock(test_output_frequency_hz);
-
-        pca.set_pw_ms(Channel::C0, pca.max_pw_ms + 1.0).unwrap();
-    }
-}
+/// Customized [Result], where the error type is [Pca9685Error]
+pub type Pca9685Result<T> = Result<T, Pca9685Error>;

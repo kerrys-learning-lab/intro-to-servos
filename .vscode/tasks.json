@@ -33,8 +33,26 @@
 			"command": "cargo",
 			"args": [
 				"test",
-				"--lib",
 				"--quiet"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"label": "build docker image (arm64)",
+			"type": "shell",
+			"problemMatcher": [],
+			"command": "docker",
+			"args": [
+				"buildx",
+				"build",
+				"--platform",
+				"linux/arm64",
+				"--tag",
+				"ghcr.io/kerrys-learning-lab/pca9685-service:latest-arm64",
+				"."
 			],
 			"group": {
 				"kind": "build",
@@ -47,8 +65,8 @@
 			"command": "scp",
 			"problemMatcher": [],
 			"args": [
-				"target/aarch64-unknown-linux-gnu/release/i2c-test",
-				"pca9685.yaml",
+				"target/aarch64-unknown-linux-gnu/release/pca9685-*",
+				"data/*",
 				"rpi:/var/tmp/"
 			],
 			"dependsOn": [
