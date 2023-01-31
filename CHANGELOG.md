@@ -1,3 +1,19 @@
+## v1.1.0 (2023-01-31)
+
+### Feat
+
+- Create RESTful service and Docker image
+- Create RESTful service and Docker image
+- Create RESTful service and Docker image
+- Create RESTful service and Docker image
+- Create RESTful service and Docker image
+- Create RESTful service and Docker image
+- Create RESTful service and Docker image
+- Create RESTful service and Docker image
+- Create RESTful service and Docker image
+- Create RESTful service and Docker image
+- Create RESTful service and Docker image
+
 ## v1.0.2 (2023-01-25)
 
 ### Fix
