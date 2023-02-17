@@ -16,11 +16,11 @@ impl Pca9685 {
         return Pca9685::init(config, Pca9685ProxyImpl::new(config));
     }
 
-    /// Creates a **mock** [Pca9685] utilizing the given [Config].  Commands
+    /// Creates a **null** [Pca9685] utilizing the given [Config].  Commands
     /// which *should* affect the PCA9685 output (e.g., [Pca9685::set_pwm_count],
     /// [Pca9685::set_pw_ms], and [Pca9685::set_pct]) actually have no effect.
-    pub fn mock(config: &Config) -> Pca9685 {
-        return Pca9685::init(config, Pca9685ProxyImpl::mock(config));
+    pub fn null(config: &Config) -> Pca9685 {
+        return Pca9685::init(config, Pca9685ProxyImpl::null(config));
     }
 
     fn init(config: &Config, inner: Box<dyn Pca9685Proxy>) -> Pca9685 {
@@ -218,7 +218,7 @@ mod tests {
             open_drain: false,
         };
 
-        let pca = Pca9685::mock(&config);
+        let pca = Pca9685::null(&config);
 
         return (config, pca);
     }

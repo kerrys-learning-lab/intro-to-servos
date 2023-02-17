@@ -24,7 +24,7 @@ RUN cd /opt && \
 
 WORKDIR /opt/${PROJECT}
 
-COPY Cargo.* ./
+COPY Cargo.* build.rs ./
 
 # NOTE: With emulation (e.g. --platform linux/arm64), this layer can take
 #       upwards of ** 30 MINUTES **

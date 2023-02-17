@@ -7,14 +7,14 @@
 ```
 pi@raspberrypi:~ $ i2cdetect -y 1
      0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
-00:                         -- -- -- -- -- -- -- -- 
-10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
-20: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
-30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
-40: 40 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
-50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
-60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
-70: 70 -- -- -- -- -- -- --   
+00:                         -- -- -- -- -- -- -- --
+10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+20: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+40: 40 -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+70: 70 -- -- -- -- -- -- --
 ```
 
 ## Cross-compile the code for ARM architecture
@@ -57,11 +57,12 @@ pi@raspberrypi:~ $ /var/tmp/pca9685-channel-tester --config-file-path /var/tmp/p
 ## Test the server
 ```
 pi@raspberrypi:~ $ export RUST_LOG=debug
+pi@raspberrypi:~ $ export ROCKET_CONFIG=/var/tmp/rocket.toml
 pi@raspberrypi:~ $ /var/tmp/pca9685-service --config-file-path /var/tmp/pca9685.yaml
 
 # In another shell...
-user@host:~ $ curl http://raspberrypi.local:9999/ping
-pong
+user@host:~ $ curl http://raspberrypi.local:9999/status
+{"status":"HEALTHY","software":{"version":"1.1.0"}}
 
 user@host:~ $ curl -X POST \
                    -H "Content-Type: application/json" \
@@ -72,7 +73,7 @@ user@host:~ $ curl -X POST \
 user@host:~ $ curl -X PUT \
                    -H "Content-Type: application/json" \
                    -d @data/channel_0_pw_1.5ms.json \
-                   http://raspberrypi.local:9999/channel/0  
+                   http://raspberrypi.local:9999/channel/0
 
 ```
 
@@ -93,7 +94,7 @@ binfmt-support 2.2.1
 
 user@host:~ $ docker run --rm \
                          --privileged \
-                         docker/binfmt:a7996909642ee92942dcd6cff44b9b95f08dad64
+                         linuxkit/binfmt:ecd24b710cad869af6a4716809f62d7164286367
 
 user@host:~ $ docker buildx ls
 NAME/NODE     DRIVER/ENDPOINT STATUS  BUILDKIT PLATFORMS

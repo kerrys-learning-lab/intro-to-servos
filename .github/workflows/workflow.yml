@@ -2,6 +2,9 @@ name: Docker image workflow
 
 on: [push, workflow_dispatch]
 
+env:
+  OUT_DIR: /tmp
+
 jobs:
   image-workflow:
     uses: kerrys-learning-lab/.github/.github/workflows/docker-image.workflow.yml@main
