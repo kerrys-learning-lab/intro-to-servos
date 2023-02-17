@@ -1,6 +1,6 @@
 [package]
 name = "pca9685"
-version = "1.1.0"
+version = "1.2.0"
 edition = "2021"
 description = "A PCA9685 library for managing servos and LEDs"
 license = "GPL-3.0-or-later"

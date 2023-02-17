@@ -1,3 +1,11 @@
+## v1.2.0 (2023-02-17)
+
+### Feat
+
+- Add /status endpoint (remove /ping)
+- Add /status endpoint (remove /ping)
+- Add /status endpoint (remove /ping)
+
 ## v1.1.0 (2023-01-31)
 
 ### Feat
