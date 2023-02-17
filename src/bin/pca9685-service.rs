@@ -2,7 +2,7 @@ use std::fs;
 
 use clap::Parser;
 use log;
-use pca9685::{ChannelConfig, Config, Pca9685, Pca9685Error};
+use pca9685::{utils, ChannelConfig, Config, Pca9685, Pca9685Error};
 use pwm_pca9685::Channel;
 use rocket::http::Status;
 use rocket::response::status;
@@ -16,6 +16,25 @@ use pca9685::utils::{deserialize_channel, serialize_channel};
 #[serde(crate = "rocket::serde")]
 struct ErrorResponse {
     error: String,
+}
+
+#[derive(Debug, PartialEq, EnumString, Serialize, Deserialize)]
+enum StatusType {
+    HEALTHY,
+    DEGRADED,
+}
+
+#[derive(Serialize)]
+#[serde(crate = "rocket::serde")]
+struct SoftwareStatus {
+    version: String,
+}
+
+#[derive(Serialize)]
+#[serde(crate = "rocket::serde")]
+struct StatusResponse {
+    status: StatusType,
+    software: SoftwareStatus,
 }
 
 #[derive(Debug, PartialEq, EnumString, Serialize, Deserialize)]
@@ -60,9 +79,14 @@ extern crate rocket;
 type HttpError = status::Custom<Json<ErrorResponse>>;
 type HttpResult<T> = Result<Json<T>, HttpError>;
 
-#[get("/ping")]
-fn ping() -> &'static str {
-    "pong"
+#[get("/status")]
+fn get_status() -> HttpResult<StatusResponse> {
+    Ok(Json(StatusResponse {
+        status: StatusType::HEALTHY,
+        software: SoftwareStatus {
+            version: utils::built_info::PKG_VERSION.to_string(),
+        },
+    }))
 }
 
 fn extract_channel(path_channel: u8, body_channel: Channel) -> Result<Channel, HttpError> {
@@ -220,7 +244,7 @@ fn delete_channel(channel: u8, pca: &State<Pca9685>) -> HttpResult<ChannelConfig
 fn rocket(config: &Config, mock: bool) -> Rocket<Build> {
     let pca9685 = if mock {
         log::warn!(target: "server", "Using mock PCA9685 driver.");
-        Pca9685::mock(&config)
+        Pca9685::null(&config)
     } else {
         Pca9685::new(&config)
     };
@@ -228,7 +252,13 @@ fn rocket(config: &Config, mock: bool) -> Rocket<Build> {
     rocket::build()
         .mount(
             "/",
-            routes![ping, post_channel, put_channel, get_channel, delete_channel],
+            routes![
+                get_status,
+                post_channel,
+                put_channel,
+                get_channel,
+                delete_channel
+            ],
         )
         .manage(pca9685)
 }
@@ -287,11 +317,10 @@ mod pca9685_server_test {
     }
 
     #[test]
-    fn ping() {
+    fn get_status() {
         let client = Client::tracked(create_mock()).expect("valid rocket instance");
-        let response = client.get(uri!(super::ping)).dispatch();
+        let response = client.get(uri!(super::get_status)).dispatch();
         assert_eq!(response.status(), Status::Ok);
-        assert_eq!(response.into_string().unwrap(), "pong");
     }
 
     #[test]

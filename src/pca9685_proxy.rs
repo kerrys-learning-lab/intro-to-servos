@@ -96,7 +96,7 @@ impl Pca9685ProxyImpl {
         return Box::new(pca);
     }
 
-    pub(super) fn mock(config: &Config) -> Box<dyn Pca9685Proxy> {
+    pub(super) fn null(config: &Config) -> Box<dyn Pca9685Proxy> {
         return Box::new(Pca9685ProxyImpl::init(&config, None));
     }
 
