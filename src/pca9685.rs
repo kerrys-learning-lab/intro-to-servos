@@ -42,10 +42,16 @@ impl Pca9685 {
             );
         }
 
-        Pca9685 {
+        let pca = Pca9685 {
             inner: Mutex::new(inner),
             channels: Mutex::new(channels),
+        };
+
+        for c in &config.channels {
+            pca.configure_channel(&c).unwrap();
         }
+
+        pca
     }
 
     /// Returns the maximum pulse width (in milliseconds) given the configured
@@ -98,7 +104,7 @@ impl Pca9685 {
     }
 
     /// Configures a channel given a [ChannelConfig].
-    pub fn configure_channel(&self, config: ChannelConfig) -> Pca9685Result<ChannelConfig> {
+    pub fn configure_channel(&self, config: &ChannelConfig) -> Pca9685Result<ChannelConfig> {
         let raw_channel = config.channel as u8;
 
         match self.channels.lock().unwrap().get_mut(&raw_channel) {
@@ -216,6 +222,7 @@ mod tests {
             address: 0x40,
             output_frequency_hz: output_frequency_hz,
             open_drain: false,
+            channels: Default::default(),
         };
 
         let pca = Pca9685::null(&config);

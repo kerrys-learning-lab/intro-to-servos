@@ -30,6 +30,9 @@ pub struct Config {
     /// Open drain (if not set, use Totem pole)
     #[serde(default)]
     pub open_drain: bool,
+
+    #[serde(default)]
+    pub channels: Vec<ChannelConfig>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
@@ -61,7 +64,7 @@ impl Default for ChannelCountLimits {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 /// Represents the desired and/or actual configuration of a Channel.
 ///
 /// As an input, sets the `ChannelCountLimits` on the associated Channel (in

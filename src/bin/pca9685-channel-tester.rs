@@ -2,7 +2,6 @@ use clap::Parser;
 use env_logger;
 use pca9685::{Config, Pca9685};
 use pwm_pca9685::Channel;
-use std::fs;
 
 /// Simple program to interact with a PCA9685
 #[derive(Parser, Debug)]
@@ -26,8 +25,7 @@ fn main() {
 
     let args = Args::parse();
 
-    let config = fs::read_to_string(args.config_file_path).unwrap();
-    let config: Config = serde_yaml::from_str(&config).unwrap();
+    let config: Config = Config::load_from_file(&args.config_file_path);
     let pca = Pca9685::new(&config);
 
     let channel = Channel::try_from(args.channel).unwrap();

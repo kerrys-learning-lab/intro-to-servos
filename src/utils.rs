@@ -1,9 +1,17 @@
 use pwm_pca9685::Channel;
 use serde::de::{self, Visitor};
 use serde::{Deserializer, Serializer};
-use std::fmt;
+use std::{fmt, fs};
 
-use crate::Pca9685Error;
+use crate::{Config, Pca9685Error};
+
+impl Config {
+    pub fn load_from_file(path: &String) -> Config {
+        let config = fs::read_to_string(path).unwrap();
+
+        serde_yaml::from_str(&config).unwrap()
+    }
+}
 
 impl fmt::Debug for Pca9685Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
