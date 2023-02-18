@@ -14,3 +14,4 @@ jobs:
       actor_email: ${{ secrets.KERRYS_LEARNING_LAB_EMAIL }}
     with:
       arm64: true
+      image_cache: true

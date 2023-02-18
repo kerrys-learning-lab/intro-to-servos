@@ -1,5 +1,3 @@
-use std::fs;
-
 use clap::Parser;
 use log;
 use pca9685::{utils, ChannelConfig, Config, Pca9685, Pca9685Error};
@@ -154,7 +152,7 @@ fn post_channel(command: Json<ChannelConfig>, pca: &State<Pca9685>) -> HttpResul
                     }),
                 ))
             }
-            None => match pca.configure_channel(command.into_inner()) {
+            None => match pca.configure_channel(&command.into_inner()) {
                 Ok(new_config) => Ok(Json(new_config)),
                 Err(error) => Err(extract_error(&error)),
             },
@@ -231,7 +229,7 @@ fn delete_channel(channel: u8, pca: &State<Pca9685>) -> HttpResult<ChannelConfig
     // Assert channel is configured/exists
     get_channel_config(channel, pca)?;
 
-    match pca.configure_channel(ChannelConfig {
+    match pca.configure_channel(&ChannelConfig {
         channel: channel,
         current_count: None,
         custom_limits: None,
@@ -269,8 +267,7 @@ async fn main() -> Result<(), rocket::Error> {
 
     let args = Args::parse();
 
-    let config = fs::read_to_string(args.config_file_path).unwrap();
-    let config: Config = serde_yaml::from_str(&config).unwrap();
+    let config: Config = Config::load_from_file(&args.config_file_path);
 
     // Using conditional compilation..if the architecture is not ARM, use a mock PCA9685
     let force_mock = cfg!(not(any(target_arch = "arm", target_arch = "aarch64")));
@@ -285,7 +282,7 @@ mod pca9685_server_test {
     use crate::{ChannelCommand, CommandType};
 
     use super::rocket;
-    use pca9685::{ChannelConfig, ChannelCountLimits, Config, PCA_PWM_RESOLUTION};
+    use pca9685::{ChannelConfig, ChannelLimits, Config, PCA_PWM_RESOLUTION};
     use pwm_pca9685::Channel;
     use rocket::http::{ContentType, Status};
     use rocket::local::blocking::Client;
@@ -298,10 +295,7 @@ mod pca9685_server_test {
         ChannelConfig {
             channel: Channel::try_from(TEST_CHANNEL_RAW_VALUE).unwrap(),
             current_count: None,
-            custom_limits: Some(ChannelCountLimits {
-                min_on_count: 1000,
-                max_on_count: 2000,
-            }),
+            custom_limits: Some(ChannelLimits::from_count_limits(1000, 2000)),
         }
     }
 
@@ -311,6 +305,7 @@ mod pca9685_server_test {
             address: 0x40,
             output_frequency_hz: 200,
             open_drain: false,
+            channels: Default::default(),
         };
 
         rocket(&config, true)

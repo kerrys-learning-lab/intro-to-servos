@@ -12,7 +12,7 @@ pub mod pca9685;
 mod pca9685_proxy;
 pub mod utils;
 
-/// The PCA9685 has 4096 steps (12-bit PWM) of resolution
+/// The PCA9685 has 4096 steps/counts (12-bit PWM) of resolution
 pub const PCA_PWM_RESOLUTION: u16 = 4096;
 
 #[derive(Debug, Deserialize)]
@@ -30,9 +30,23 @@ pub struct Config {
     /// Open drain (if not set, use Totem pole)
     #[serde(default)]
     pub open_drain: bool,
+
+    #[serde(default)]
+    pub channels: Vec<ChannelConfig>,
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+#[derive(Deserialize, Serialize, PartialEq, Clone, Copy)]
+/// Limits can be specified in units of counts or milliseconds (pulse-width)
+///
+/// Only one of count_limits or pw_limits may be supplied at configuration-time.
+/// When pw_limits are given, the corresponding count_limits are automatically
+/// calculated based on the configured output_frequency.
+pub struct ChannelLimits {
+    pub count_limits: Option<ChannelCountLimits>,
+    pub pw_limits: Option<ChannelPulseWidthLimits>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone, Copy)]
 /// Constrains the limits of a Channel to values other than the default [0, 4095].
 ///
 /// For example, a servo may be constrained to [1000, 3000] which then affects
@@ -43,25 +57,19 @@ pub struct ChannelCountLimits {
     pub max_on_count: u16,
 }
 
-const DEFAULT_CHANNEL_COUNT_LIMITS: ChannelCountLimits = ChannelCountLimits {
-    min_on_count: 0,
-    max_on_count: PCA_PWM_RESOLUTION,
-};
-
-impl ChannelCountLimits {
-    /// Returns true if `value` is within [`min_on_count`, `max_on_count`]
-    pub fn is_valid(&self, value: u16) -> bool {
-        value >= self.min_on_count && value <= self.max_on_count
-    }
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone, Copy)]
+/// Constrains the limits of a Channel to values other than the values
+/// automatically derived from output_frequency.
+///
+/// For example, a servo may be constrained to [1.0ms, 2.0ms] which then affects
+/// the behavior of subsequent calls to [Pca9685::set_pwm_count],
+/// [Pca9685::set_pw_ms], and [Pca9685::set_pct]
+pub struct ChannelPulseWidthLimits {
+    pub min_on_ms: f64,
+    pub max_on_ms: f64,
 }
 
-impl Default for ChannelCountLimits {
-    fn default() -> Self {
-        DEFAULT_CHANNEL_COUNT_LIMITS
-    }
-}
-
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 /// Represents the desired and/or actual configuration of a Channel.
 ///
 /// As an input, sets the `ChannelCountLimits` on the associated Channel (in
@@ -76,14 +84,19 @@ pub struct ChannelConfig {
     )]
     pub channel: Channel,
     pub current_count: Option<u16>,
-    pub custom_limits: Option<ChannelCountLimits>,
+    pub custom_limits: Option<ChannelLimits>,
+}
+
+#[derive(PartialEq, Debug, Clone, Copy)]
+struct PcaClockConfig {
+    max_pw_ms: f64,
+    single_pw_duration_ms: f64,
 }
 
 struct ChannelProxy {
     name: String,
     config: ChannelConfig,
-    pca_max_pw_ms: f64,
-    pca_count_length_ms: f64,
+    clock_config: PcaClockConfig,
 }
 
 trait Pca9685Proxy {
@@ -130,7 +143,8 @@ pub struct Pca9685 {
 pub enum Pca9685Error {
     NoSuchChannelError(u8),
     PulseWidthRangeError(f64, f64),
-    CustomLimitsError(u16, ChannelCountLimits),
+    CustomLimitsError(u16, ChannelLimits),
+    InvalidConfiguration(String),
     PercentOfRangeError(f64),
     Pca9685DriverError(pwm_pca9685::Error<LinuxI2CError>),
 }

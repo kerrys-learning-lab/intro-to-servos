@@ -1,3 +1,9 @@
 device: /dev/i2c-1
 address: 0x40
 output_frequency_hz: 50
+channels:
+  - channel: 0
+    custom_limits:
+      count_limits:
+        min_on_count: 0
+        max_on_count: 4096
