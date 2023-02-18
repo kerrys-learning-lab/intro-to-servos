@@ -4,8 +4,8 @@ use serde::{Deserializer, Serializer};
 use std::{fmt, fs};
 
 use crate::{
-    ChannelConfig, ChannelCountLimits, ChannelLimits, ChannelMsLimits, Config, Pca9685Error,
-    Pca9685Result, PcaClockConfig, PCA_PWM_RESOLUTION,
+    ChannelConfig, ChannelCountLimits, ChannelLimits, ChannelPulseWidthLimits, Config,
+    Pca9685Error, Pca9685Result, PcaClockConfig, PCA_PWM_RESOLUTION,
 };
 
 impl Config {
@@ -56,7 +56,7 @@ impl ChannelLimits {
                 min_on_count: clock_config.pw_to_count(min_on_pw_ms).unwrap(),
                 max_on_count: clock_config.pw_to_count(max_on_pw_ms).unwrap(),
             }),
-            pw_limits: Some(ChannelMsLimits {
+            pw_limits: Some(ChannelPulseWidthLimits {
                 min_on_ms: min_on_pw_ms,
                 max_on_ms: max_on_pw_ms,
             }),

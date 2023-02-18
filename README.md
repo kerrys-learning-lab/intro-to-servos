@@ -64,6 +64,8 @@ pi@raspberrypi:~ $ /var/tmp/pca9685-service --config-file-path /var/tmp/pca9685.
 user@host:~ $ curl http://raspberrypi.local:9999/status
 {"status":"HEALTHY","software":{"version":"1.1.0"}}
 
+# NOTE: Channel may already be configured, depending on content of
+#       /var/tmp/pca9685.yaml
 user@host:~ $ curl -X POST \
                    -H "Content-Type: application/json" \
                    -d @data/channel_0_config.json \

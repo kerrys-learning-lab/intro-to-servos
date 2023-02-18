@@ -12,7 +12,7 @@ pub mod pca9685;
 mod pca9685_proxy;
 pub mod utils;
 
-/// The PCA9685 has 4096 steps (12-bit PWM) of resolution
+/// The PCA9685 has 4096 steps/counts (12-bit PWM) of resolution
 pub const PCA_PWM_RESOLUTION: u16 = 4096;
 
 #[derive(Debug, Deserialize)]
@@ -36,9 +36,14 @@ pub struct Config {
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Copy)]
+/// Limits can be specified in units of counts or milliseconds (pulse-width)
+///
+/// Only one of count_limits or pw_limits may be supplied at configuration-time.
+/// When pw_limits are given, the corresponding count_limits are automatically
+/// calculated based on the configured output_frequency.
 pub struct ChannelLimits {
     pub count_limits: Option<ChannelCountLimits>,
-    pub pw_limits: Option<ChannelMsLimits>,
+    pub pw_limits: Option<ChannelPulseWidthLimits>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Debug, Clone, Copy)]
@@ -53,7 +58,13 @@ pub struct ChannelCountLimits {
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Debug, Clone, Copy)]
-pub struct ChannelMsLimits {
+/// Constrains the limits of a Channel to values other than the values
+/// automatically derived from output_frequency.
+///
+/// For example, a servo may be constrained to [1.0ms, 2.0ms] which then affects
+/// the behavior of subsequent calls to [Pca9685::set_pwm_count],
+/// [Pca9685::set_pw_ms], and [Pca9685::set_pct]
+pub struct ChannelPulseWidthLimits {
     pub min_on_ms: f64,
     pub max_on_ms: f64,
 }
