@@ -1,3 +1,9 @@
+## v1.3.0 (2023-02-18)
+
+### Feat
+
+- Advanced configuration (#13)
+
 ## v1.2.0 (2023-02-17)
 
 ### Feat
