@@ -2,12 +2,12 @@ use log;
 use pwm_pca9685::Channel;
 
 use crate::{
-    ChannelConfig, ChannelCountLimits, ChannelProxy, Pca9685Error, Pca9685Proxy, Pca9685Result,
-    DEFAULT_CHANNEL_COUNT_LIMITS, PCA_PWM_RESOLUTION,
+    ChannelConfig, ChannelLimits, ChannelProxy, Pca9685Error, Pca9685Proxy, Pca9685Result,
+    PcaClockConfig, PCA_PWM_RESOLUTION,
 };
 
 impl ChannelProxy {
-    pub fn new(channel: Channel, pca_count_length_ms: f64, pca_max_pw_ms: f64) -> ChannelProxy {
+    pub fn new(channel: Channel, clock_config: PcaClockConfig) -> ChannelProxy {
         ChannelProxy {
             name: String::from(format!("Channel {:?}", channel)),
             config: ChannelConfig {
@@ -15,12 +15,11 @@ impl ChannelProxy {
                 current_count: None,
                 custom_limits: None,
             },
-            pca_count_length_ms: pca_count_length_ms,
-            pca_max_pw_ms: pca_max_pw_ms,
+            clock_config: clock_config,
         }
     }
 
-    pub fn configure(&mut self, config: &ChannelConfig) -> ChannelConfig {
+    pub fn configure(&mut self, config: &ChannelConfig) -> Pca9685Result<ChannelConfig> {
         self.configure_limits(&config.custom_limits)
     }
 
@@ -32,10 +31,7 @@ impl ChannelProxy {
                 None => None,
             },
             custom_limits: match &self.config.custom_limits {
-                Some(limits) => Some(ChannelCountLimits {
-                    min_on_count: limits.min_on_count,
-                    max_on_count: limits.max_on_count,
-                }),
+                Some(limits) => Some(limits.clone()),
                 None => None,
             },
         }
@@ -43,36 +39,52 @@ impl ChannelProxy {
 
     pub fn configure_limits(
         &mut self,
-        custom_limits: &Option<ChannelCountLimits>,
-    ) -> ChannelConfig {
+        custom_limits: &Option<ChannelLimits>,
+    ) -> Pca9685Result<ChannelConfig> {
         match custom_limits {
             Some(limits) => {
+                if limits.count_limits.is_none() && limits.pw_limits.is_none() {
+                    return Err(Pca9685Error::InvalidConfiguration(
+                        "ChannelConfig.custom_limits must contain either count_limits or pw_limits"
+                            .to_string(),
+                    ));
+                }
+                if limits.count_limits.is_some() && limits.pw_limits.is_some() {
+                    return Err(Pca9685Error::InvalidConfiguration(
+                        "ChannelConfig.custom_limits must contain only one of count_limits or pw_limits"
+                            .to_string(),
+                    ));
+                }
+
+                limits.count_limits.map(|count_limits| {
+                    self.config.custom_limits = Some(ChannelLimits::from_count_limits(
+                        count_limits.min_on_count,
+                        count_limits.max_on_count,
+                    ));
+                });
+                limits.pw_limits.map(|pw_limits| {
+                    self.config.custom_limits = Some(ChannelLimits::from_pw_limits(
+                        pw_limits.min_on_ms,
+                        pw_limits.max_on_ms,
+                        self.clock_config,
+                    ));
+                });
+
                 log::info!(
                     target: &self.name,
-                    "Configured limits to [{}, {})", limits.min_on_count, limits.max_on_count
+                    "Configured limits to {:?}", self.config.custom_limits.unwrap()
                 );
-                self.config.custom_limits = Some(ChannelCountLimits {
-                    max_on_count: limits.max_on_count,
-                    min_on_count: limits.min_on_count,
-                })
+
+                Ok(self.config())
             }
             None => {
                 log::info!(target: &self.name, "Configured limits to None");
-                self.config.custom_limits = None
+                self.config.custom_limits = None;
+
+                Ok(self.config())
             }
         }
-
-        self.config()
     }
-
-    // fn configure_limits_ms(&mut self, min_pw_ms: f64, max_pw_ms: f64) -> &ChannelConfig {
-    //     self.configure_limits(&Some(ChannelCountLimits {
-    //         min_on_count: self.pw_to_count(min_pw_ms).unwrap(), // TODO Don't use unwrap
-    //         max_on_count: self.pw_to_count(max_pw_ms).unwrap(),
-    //     }));
-
-    //     &self.config
-    // }
 
     pub fn full_on(&mut self, pca: &mut Box<dyn Pca9685Proxy>) -> Pca9685Result<ChannelConfig> {
         self.config.current_count = Some(PCA_PWM_RESOLUTION);
@@ -101,18 +113,7 @@ impl ChannelProxy {
         pw_ms: f64,
         pca: &mut Box<dyn Pca9685Proxy>,
     ) -> Pca9685Result<ChannelConfig> {
-        self.set_pwm_count(self.pw_to_count(pw_ms)?, pca)
-    }
-
-    fn pw_to_count(&self, pw_ms: f64) -> Result<u16, Pca9685Error> {
-        if pw_ms < 0.0 || pw_ms > self.pca_max_pw_ms {
-            return Err(Pca9685Error::PulseWidthRangeError(
-                pw_ms,
-                self.pca_max_pw_ms,
-            ));
-        }
-
-        Ok((pw_ms / self.pca_count_length_ms) as u16)
+        self.set_pwm_count(self.clock_config.pw_to_count(pw_ms)?, pca)
     }
 
     pub fn set_pct(
@@ -120,19 +121,11 @@ impl ChannelProxy {
         pct: f64,
         pca: &mut Box<dyn Pca9685Proxy>,
     ) -> Pca9685Result<ChannelConfig> {
-        if pct < 0.0 || pct > 1.0 {
-            return Err(Pca9685Error::PercentOfRangeError(pct));
-        }
+        let limits = self.config.custom_limits.unwrap_or_default();
 
-        let (min_on_count, max_on_count) = match &self.config.custom_limits {
-            Some(limits) => (limits.min_on_count, limits.max_on_count),
-            None => (0, PCA_PWM_RESOLUTION),
-        };
-        let pwm_range_width = max_on_count - min_on_count;
-        let scaled_pwm_pct = pwm_range_width as f64 * pct;
-        let pwm_counts = scaled_pwm_pct as u16 + min_on_count;
-
-        self.set_pwm_count(pwm_counts, pca)
+        limits
+            .pct_to_count(pct)
+            .and_then(|pwm_off_count| self.set_pwm_count(pwm_off_count, pca))
     }
 
     pub fn set_pwm_count(
@@ -140,9 +133,9 @@ impl ChannelProxy {
         pwm_off_count: u16,
         pca: &mut Box<dyn Pca9685Proxy>,
     ) -> Pca9685Result<ChannelConfig> {
-        let limits = match &self.config.custom_limits {
+        let limits = match self.config.custom_limits {
             Some(limits) => limits,
-            None => &DEFAULT_CHANNEL_COUNT_LIMITS,
+            None => Default::default(),
         };
         if !limits.is_valid(pwm_off_count) {
             return Err(Pca9685Error::CustomLimitsError(
@@ -174,12 +167,18 @@ impl ChannelProxy {
 
 #[cfg(test)]
 mod tests {
-    use crate::{ChannelCountLimits, ChannelProxy, Pca9685Error, Pca9685Proxy, PCA_PWM_RESOLUTION};
+    use crate::{
+        ChannelLimits, ChannelProxy, Pca9685Error, Pca9685Proxy, PcaClockConfig, PCA_PWM_RESOLUTION,
+    };
     use pwm_pca9685::{Channel, OutputDriver};
 
     const TEST_OUTPUT_FREQUENCY_HZ: f64 = 200.0;
     const TEST_PCA_MAX_PW_MS: f64 = 1000.0 / TEST_OUTPUT_FREQUENCY_HZ;
     const TEST_PCA_COUNT_DURATION_MS: f64 = TEST_PCA_MAX_PW_MS / PCA_PWM_RESOLUTION as f64;
+    const TEST_PCA_CLOCK_CONFIG: PcaClockConfig = PcaClockConfig {
+        single_pw_duration_ms: TEST_PCA_COUNT_DURATION_MS,
+        max_pw_ms: TEST_PCA_MAX_PW_MS,
+    };
 
     struct MockPca9685Proxy;
     impl Pca9685Proxy for MockPca9685Proxy {
@@ -239,11 +238,8 @@ mod tests {
 
     #[test]
     fn set_pwm_count() -> Result<(), Pca9685Error> {
-        let mut channel = ChannelProxy::new(
-            Channel::try_from(0 as u8).unwrap(),
-            TEST_PCA_COUNT_DURATION_MS,
-            TEST_PCA_MAX_PW_MS,
-        );
+        let mut channel =
+            ChannelProxy::new(Channel::try_from(0 as u8).unwrap(), TEST_PCA_CLOCK_CONFIG);
 
         let mut mock_pca9685_proxy: Box<dyn Pca9685Proxy> = Box::new(MockPca9685Proxy {});
 
@@ -262,11 +258,8 @@ mod tests {
     #[test]
     #[should_panic(expected = "must be within the limits")]
     fn set_pwm_count_too_large() {
-        let mut channel = ChannelProxy::new(
-            Channel::try_from(0 as u8).unwrap(),
-            TEST_PCA_COUNT_DURATION_MS,
-            TEST_PCA_MAX_PW_MS,
-        );
+        let mut channel =
+            ChannelProxy::new(Channel::try_from(0 as u8).unwrap(), TEST_PCA_CLOCK_CONFIG);
 
         let mut mock_pca9685_proxy: Box<dyn Pca9685Proxy> = Box::new(MockPca9685Proxy {});
 
@@ -279,8 +272,10 @@ mod tests {
     fn set_pw_ms() -> Result<(), Pca9685Error> {
         let mut channel = ChannelProxy::new(
             Channel::try_from(0 as u8).unwrap(),
-            TEST_PCA_COUNT_DURATION_MS,
-            TEST_PCA_MAX_PW_MS,
+            PcaClockConfig {
+                single_pw_duration_ms: TEST_PCA_COUNT_DURATION_MS,
+                max_pw_ms: TEST_PCA_MAX_PW_MS,
+            },
         );
 
         let mut mock_pca9685_proxy: Box<dyn Pca9685Proxy> = Box::new(MockPca9685Proxy {});
@@ -339,11 +334,8 @@ mod tests {
 
     #[test]
     fn set_pct() -> Result<(), Pca9685Error> {
-        let mut channel = ChannelProxy::new(
-            Channel::try_from(0 as u8).unwrap(),
-            TEST_PCA_COUNT_DURATION_MS,
-            TEST_PCA_MAX_PW_MS,
-        );
+        let mut channel =
+            ChannelProxy::new(Channel::try_from(0 as u8).unwrap(), TEST_PCA_CLOCK_CONFIG);
 
         let mut mock_pca9685_proxy: Box<dyn Pca9685Proxy> = Box::new(MockPca9685Proxy {});
 
@@ -364,18 +356,14 @@ mod tests {
 
     #[test]
     fn set_pct_custom_limits() -> Result<(), Pca9685Error> {
-        let mut channel = ChannelProxy::new(
-            Channel::try_from(0 as u8).unwrap(),
-            TEST_PCA_COUNT_DURATION_MS,
-            TEST_PCA_MAX_PW_MS,
-        );
+        let mut channel =
+            ChannelProxy::new(Channel::try_from(0 as u8).unwrap(), TEST_PCA_CLOCK_CONFIG);
 
         let mut mock_pca9685_proxy: Box<dyn Pca9685Proxy> = Box::new(MockPca9685Proxy {});
 
-        channel.configure_limits(&Some(ChannelCountLimits {
-            min_on_count: 1000,
-            max_on_count: 2000,
-        }));
+        channel
+            .configure_limits(&Some(ChannelLimits::from_count_limits(1000, 2000)))
+            .unwrap();
 
         // Test at percentages of range
         for pct in [0.0, 0.25, 0.5, 0.75, 1.0] {
@@ -395,16 +383,12 @@ mod tests {
     #[test]
     #[should_panic(expected = "must be within the limits")]
     fn set_pwm_count_too_small_custom_limits() {
-        let mut channel = ChannelProxy::new(
-            Channel::try_from(0 as u8).unwrap(),
-            TEST_PCA_COUNT_DURATION_MS,
-            TEST_PCA_MAX_PW_MS,
-        );
+        let mut channel =
+            ChannelProxy::new(Channel::try_from(0 as u8).unwrap(), TEST_PCA_CLOCK_CONFIG);
 
-        channel.configure_limits(&Some(ChannelCountLimits {
-            min_on_count: 1000,
-            max_on_count: 2000,
-        }));
+        channel
+            .configure_limits(&Some(ChannelLimits::from_count_limits(1000, 2000)))
+            .unwrap();
 
         let mut mock_pca9685_proxy: Box<dyn Pca9685Proxy> = Box::new(MockPca9685Proxy {});
 
@@ -414,16 +398,12 @@ mod tests {
     #[test]
     #[should_panic(expected = "must be within the limits")]
     fn set_pwm_count_too_large_custom_limits() {
-        let mut channel = ChannelProxy::new(
-            Channel::try_from(0 as u8).unwrap(),
-            TEST_PCA_COUNT_DURATION_MS,
-            TEST_PCA_MAX_PW_MS,
-        );
+        let mut channel =
+            ChannelProxy::new(Channel::try_from(0 as u8).unwrap(), TEST_PCA_CLOCK_CONFIG);
 
-        channel.configure_limits(&Some(ChannelCountLimits {
-            min_on_count: 1000,
-            max_on_count: 2000,
-        }));
+        channel
+            .configure_limits(&Some(ChannelLimits::from_count_limits(1000, 2000)))
+            .unwrap();
 
         let mut mock_pca9685_proxy: Box<dyn Pca9685Proxy> = Box::new(MockPca9685Proxy {});
 
@@ -435,11 +415,8 @@ mod tests {
     #[test]
     #[should_panic(expected = "must be within the limits")]
     fn set_pw_ms_negative() {
-        let mut channel = ChannelProxy::new(
-            Channel::try_from(0 as u8).unwrap(),
-            TEST_PCA_COUNT_DURATION_MS,
-            TEST_PCA_MAX_PW_MS,
-        );
+        let mut channel =
+            ChannelProxy::new(Channel::try_from(0 as u8).unwrap(), TEST_PCA_CLOCK_CONFIG);
 
         let mut mock_pca9685_proxy: Box<dyn Pca9685Proxy> = Box::new(MockPca9685Proxy {});
 
@@ -449,11 +426,8 @@ mod tests {
     #[test]
     #[should_panic(expected = "must be within the limits")]
     fn set_pw_ms_too_large() {
-        let mut channel = ChannelProxy::new(
-            Channel::try_from(0 as u8).unwrap(),
-            TEST_PCA_COUNT_DURATION_MS,
-            TEST_PCA_MAX_PW_MS,
-        );
+        let mut channel =
+            ChannelProxy::new(Channel::try_from(0 as u8).unwrap(), TEST_PCA_CLOCK_CONFIG);
 
         let mut mock_pca9685_proxy: Box<dyn Pca9685Proxy> = Box::new(MockPca9685Proxy {});
 

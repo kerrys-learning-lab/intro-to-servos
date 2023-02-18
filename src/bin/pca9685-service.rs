@@ -282,7 +282,7 @@ mod pca9685_server_test {
     use crate::{ChannelCommand, CommandType};
 
     use super::rocket;
-    use pca9685::{ChannelConfig, ChannelCountLimits, Config, PCA_PWM_RESOLUTION};
+    use pca9685::{ChannelConfig, ChannelLimits, Config, PCA_PWM_RESOLUTION};
     use pwm_pca9685::Channel;
     use rocket::http::{ContentType, Status};
     use rocket::local::blocking::Client;
@@ -295,10 +295,7 @@ mod pca9685_server_test {
         ChannelConfig {
             channel: Channel::try_from(TEST_CHANNEL_RAW_VALUE).unwrap(),
             current_count: None,
-            custom_limits: Some(ChannelCountLimits {
-                min_on_count: 1000,
-                max_on_count: 2000,
-            }),
+            custom_limits: Some(ChannelLimits::from_count_limits(1000, 2000)),
         }
     }
 

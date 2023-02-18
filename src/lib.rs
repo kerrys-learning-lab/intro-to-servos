@@ -35,7 +35,13 @@ pub struct Config {
     pub channels: Vec<ChannelConfig>,
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+#[derive(Deserialize, Serialize, PartialEq, Clone, Copy)]
+pub struct ChannelLimits {
+    pub count_limits: Option<ChannelCountLimits>,
+    pub pw_limits: Option<ChannelMsLimits>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone, Copy)]
 /// Constrains the limits of a Channel to values other than the default [0, 4095].
 ///
 /// For example, a servo may be constrained to [1000, 3000] which then affects
@@ -46,22 +52,10 @@ pub struct ChannelCountLimits {
     pub max_on_count: u16,
 }
 
-const DEFAULT_CHANNEL_COUNT_LIMITS: ChannelCountLimits = ChannelCountLimits {
-    min_on_count: 0,
-    max_on_count: PCA_PWM_RESOLUTION,
-};
-
-impl ChannelCountLimits {
-    /// Returns true if `value` is within [`min_on_count`, `max_on_count`]
-    pub fn is_valid(&self, value: u16) -> bool {
-        value >= self.min_on_count && value <= self.max_on_count
-    }
-}
-
-impl Default for ChannelCountLimits {
-    fn default() -> Self {
-        DEFAULT_CHANNEL_COUNT_LIMITS
-    }
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone, Copy)]
+pub struct ChannelMsLimits {
+    pub min_on_ms: f64,
+    pub max_on_ms: f64,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -79,14 +73,19 @@ pub struct ChannelConfig {
     )]
     pub channel: Channel,
     pub current_count: Option<u16>,
-    pub custom_limits: Option<ChannelCountLimits>,
+    pub custom_limits: Option<ChannelLimits>,
+}
+
+#[derive(PartialEq, Debug, Clone, Copy)]
+struct PcaClockConfig {
+    max_pw_ms: f64,
+    single_pw_duration_ms: f64,
 }
 
 struct ChannelProxy {
     name: String,
     config: ChannelConfig,
-    pca_max_pw_ms: f64,
-    pca_count_length_ms: f64,
+    clock_config: PcaClockConfig,
 }
 
 trait Pca9685Proxy {
@@ -133,7 +132,8 @@ pub struct Pca9685 {
 pub enum Pca9685Error {
     NoSuchChannelError(u8),
     PulseWidthRangeError(f64, f64),
-    CustomLimitsError(u16, ChannelCountLimits),
+    CustomLimitsError(u16, ChannelLimits),
+    InvalidConfiguration(String),
     PercentOfRangeError(f64),
     Pca9685DriverError(pwm_pca9685::Error<LinuxI2CError>),
 }

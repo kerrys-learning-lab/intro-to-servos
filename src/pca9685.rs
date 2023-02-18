@@ -1,6 +1,7 @@
 use crate::pca9685_proxy::Pca9685ProxyImpl;
 use crate::{
     ChannelConfig, ChannelProxy, Config, Pca9685, Pca9685Error, Pca9685Proxy, Pca9685Result,
+    PcaClockConfig,
 };
 use log;
 use pwm_pca9685::{Channel, OutputDriver};
@@ -24,22 +25,23 @@ impl Pca9685 {
     }
 
     fn init(config: &Config, inner: Box<dyn Pca9685Proxy>) -> Pca9685 {
-        let pca_count_length_ms = inner.single_count_duration_ms();
+        let pca_single_pw_duration_ms = inner.single_count_duration_ms();
         let pca_max_pw_ms = inner.max_pw_ms();
 
         log::info!(target: "pca9685", "Device:           {}", config.device);
         log::info!(target: "pca9685", "Address:          {:#02x}", config.address);
         log::info!(target: "pca9685", "Output frequency: {}Hz", config.output_frequency_hz);
         log::info!(target: "pca9685", "Max PW:           {:0.4}ms", pca_max_pw_ms);
-        log::info!(target: "pca9685", "Each count:       {:0.4}ms", pca_count_length_ms);
+        log::info!(target: "pca9685", "Each count:       {:0.4}ms", pca_single_pw_duration_ms);
 
         let mut channels = HashMap::new();
+        let clock_config = PcaClockConfig {
+            single_pw_duration_ms: pca_single_pw_duration_ms,
+            max_pw_ms: pca_max_pw_ms,
+        };
         for ch in 0..16 {
             let channel = Channel::try_from(ch).unwrap();
-            channels.insert(
-                ch,
-                ChannelProxy::new(channel, pca_count_length_ms, pca_max_pw_ms),
-            );
+            channels.insert(ch, ChannelProxy::new(channel, clock_config));
         }
 
         let pca = Pca9685 {
@@ -108,7 +110,7 @@ impl Pca9685 {
         let raw_channel = config.channel as u8;
 
         match self.channels.lock().unwrap().get_mut(&raw_channel) {
-            Some(ch) => Ok(ch.configure(&config)),
+            Some(ch) => ch.configure(&config),
             None => Err(Pca9685Error::NoSuchChannelError(raw_channel)),
         }
     }
