@@ -45,6 +45,7 @@ impl Pca9685 {
         }
 
         let pca = Pca9685 {
+            config: config.clone(),
             inner: Mutex::new(inner),
             channels: Mutex::new(channels),
         };
@@ -93,6 +94,10 @@ impl Pca9685 {
     /// the [Pca9685].
     pub fn output_type(&self) -> OutputDriver {
         return self.inner.lock().unwrap().output_type();
+    }
+
+    pub fn configuration(&self) -> Config {
+        self.config.clone()
     }
 
     /// Returns the [ChannelConfig] of the requested `channel`.

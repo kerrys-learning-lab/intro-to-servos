@@ -15,7 +15,7 @@ pub mod utils;
 /// The PCA9685 has 4096 steps/counts (12-bit PWM) of resolution
 pub const PCA_PWM_RESOLUTION: u16 = 4096;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 /// An immutable YAML-based configuration of a [Pca9685] device.
 pub struct Config {
     /// Path to I2C device file (e.g, /dev/i2c-1)
@@ -31,7 +31,7 @@ pub struct Config {
     #[serde(default)]
     pub open_drain: bool,
 
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub channels: Vec<ChannelConfig>,
 }
 
@@ -69,7 +69,7 @@ pub struct ChannelPulseWidthLimits {
     pub max_on_ms: f64,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 /// Represents the desired and/or actual configuration of a Channel.
 ///
 /// As an input, sets the `ChannelCountLimits` on the associated Channel (in
@@ -135,6 +135,7 @@ trait Pca9685Proxy {
 /// range of each Channel, and set each Channel's value using raw counts,
 /// pulse width in milliseconds, or percent of max pulse width.
 pub struct Pca9685 {
+    config: Config,
     inner: Mutex<Box<dyn Pca9685Proxy>>,
     channels: Mutex<HashMap<u8, ChannelProxy>>,
 }

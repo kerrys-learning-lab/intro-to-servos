@@ -87,6 +87,11 @@ fn get_status() -> HttpResult<StatusResponse> {
     }))
 }
 
+#[get("/configuration")]
+fn get_configuration(pca: &State<Pca9685>) -> HttpResult<Config> {
+    Ok(Json(pca.configuration()))
+}
+
 fn extract_channel(path_channel: u8, body_channel: Channel) -> Result<Channel, HttpError> {
     if path_channel != (body_channel as u8) {
         return Err(status::Custom(
@@ -251,6 +256,7 @@ fn rocket(config: &Config, mock: bool) -> Rocket<Build> {
         .mount(
             "/",
             routes![
+                get_configuration,
                 get_status,
                 post_channel,
                 put_channel,
