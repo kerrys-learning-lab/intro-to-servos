@@ -4,6 +4,7 @@ on: [push, workflow_dispatch]
 
 env:
   OUT_DIR: /tmp
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
 
 jobs:
   image-workflow:
